@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -71,13 +70,9 @@ public class EgovOpenSearchAPIController {
     public ResponseEntity<?> insertTextData() {
         Map<String, Object> response = new HashMap<>();
 
-        try {
-            openSearchManageService.insertTotalData();
-            response.put("status", "success");
-        } catch (Exception e) {
-            response.put("status", "error");
-            return ResponseEntity.ok(response);
-        }
+        //2026.02.28 KISA 보안취약점 조치
+        openSearchManageService.insertTotalData();
+        response.put("status", "success");
 
         return ResponseEntity.ok(response);
     }
@@ -91,13 +86,9 @@ public class EgovOpenSearchAPIController {
     public ResponseEntity<?> insertVectorData() {
         Map<String, Object> response = new HashMap<>();
 
-        try {
-            openSearchManageService.insertTotalVectorData();
-            response.put("status", "success");
-        } catch (Exception e) {
-            response.put("status", "error");
-            return ResponseEntity.ok(response);
-        }
+        //2026.02.28 KISA 보안취약점 조치
+        openSearchManageService.insertTotalVectorData();
+        response.put("status", "success");
 
         return ResponseEntity.ok(response);
     }
@@ -114,7 +105,8 @@ public class EgovOpenSearchAPIController {
         try {
             openSearchManageService.deleteIndex(indexName);
             response.put("status", "success");
-        } catch (Exception e) {
+        //2026.02.28 KISA 보안취약점 조치
+        } catch (IOException e) {
             response.put("status", "error");
             return ResponseEntity.ok(response);
         }
@@ -130,12 +122,8 @@ public class EgovOpenSearchAPIController {
 
     @PostMapping("/reprocess/{syncSttusCode}")
     public ResponseEntity<String> reprocessFailedSync(@PathVariable String syncSttusCode) {
-        try {
-            openSearchManageService.reprocessFailedSync(syncSttusCode);
-            return ResponseEntity.ok("Reprocess completed successfully");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Failed to reprocess: " + e.getMessage());
-        }
+        //2026.02.28 KISA 보안취약점 조치
+        openSearchManageService.reprocessFailedSync(syncSttusCode);
+        return ResponseEntity.ok("Reprocess completed successfully");
     }
 }

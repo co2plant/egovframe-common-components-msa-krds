@@ -8,15 +8,27 @@
 ![rabbitmq](https://img.shields.io/badge/rabbitmq-ff6600?style=for-the-badge&logo=RABBITMQ&logoColor=white)
 ![workflow](https://github.com/eGovFramework/egovframe-template-simple-backend/actions/workflows/maven.yml/badge.svg)
 
+## 서비스 상태 (현재 모듈 기준)
+
+| 항목 | 내용 |
+|------|------|
+| **역할** | OpenSearch 연동 **통합·벡터 검색**, 게시판 이벤트(RabbitMQ) 인덱싱, Springdoc API |
+| **애플리케이션명** | `EgovSearch` → Eureka `EGOVSEARCH` |
+| **포트** | **`9992` 고정** — Swagger 예: `http://localhost:9992/swagger-ui/index.html` |
+| **Config Server** | 사용 |
+| **Eureka** | 등록 |
+| **브라우저(포털) 접근** | **Gateway** `http://localhost:9000/ext/ops/...` |
+| **선행 인프라** | MySQL, OpenSearch(`docker-compose/Opensearch`), RabbitMQ(`docker-compose/RabbitMQ`) 권장, `EgovSearch-Config` 경로·모델 |
+
 ## 기본 환경
 
 프로젝트에서 사용된 환경 프로그램 정보는 다음과 같다.
 
 | 프로그램 명 | 버전 명   |
 | :----- | :----- |
-| Java   | 11 이상 |
-| Spring Boot | 2.7.18 |
-| Spring Cloud | 2021.0.9 |
+| Java   | 17 이상 (본 모듈 `pom.xml` 기준) |
+| Spring Boot | 3.5.6 |
+| Spring Cloud | 2025.0.0 |
 | Docker Desktop | 4.39.0 |
 | Open Search | 2.15.0 |
 | Python | 3.11.5 (Embedding 용 Model export 시 사용) |
@@ -51,6 +63,9 @@ docker-compose up
 ![capture02](https://github.com/user-attachments/assets/4b8c6712-03f2-464e-83ea-7b6e9955282a)
 
 ### SSL 환경 KeyStore 설정
+
+> **주의**: `opensearch.protocol`이 `https`인 경우 이 절차는 **필수**. KeyStore 경로(`opensearch.keystore.path`)를 설정하지 않으면 JVM 기본 TrustStore를 사용하게 되어, OpenSearch의 자체 서명 인증서를 신뢰하지 못해 **연결 오류가 발생**.
+
 
 - 클라이언트 측, 즉 개발자가 본인 PC의 KeyStore에 SSL인증서를 등록해야 한다.
 - usr/share/opensearch/config 내의 root-ca.pem을 서버로부터 `jdk 내부 lib > security`에 복사한다.

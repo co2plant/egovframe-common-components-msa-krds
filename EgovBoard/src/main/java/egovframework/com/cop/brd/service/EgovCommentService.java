@@ -11,6 +11,6 @@ public interface EgovCommentService {
 
     void insertArticleComment(CommentVO commentVO, Map<String, String> userInfo) throws FdlException;
 
-    void deleteArticleComment(CommentVO commentVO);
+    void deleteArticleComment(CommentVO commentVO, Map<String, String> userInfo);
 
 }

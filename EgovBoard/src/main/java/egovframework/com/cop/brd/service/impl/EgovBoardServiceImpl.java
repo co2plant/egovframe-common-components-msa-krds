@@ -16,6 +16,7 @@ import egovframework.com.cop.brd.service.*;
 import egovframework.com.cop.brd.util.EgovBoardUtility;
 import egovframework.com.cop.brd.util.EgovFileUtility;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang.StringUtils;
 import org.egovframe.rte.fdl.cmmn.EgovAbstractServiceImpl;
 import org.egovframe.rte.fdl.cmmn.exception.FdlException;
 import org.egovframe.rte.fdl.idgnr.EgovIdGnrService;
@@ -29,8 +30,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.ObjectUtils;
 import org.springframework.web.multipart.MultipartFile;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -241,12 +246,8 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
 
         bbsVO.setRdcnt(count);
         bbsVO.setLastUpdusrId(userInfo.get("uniqId"));
-        bbsVO.setLastUpdtPnttm(String.valueOf(LocalDateTime.now()));
 
-        DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
-        LocalDateTime formatdate = LocalDateTime.parse(bbsVO.getLastUpdtPnttm(), inputFormatter);
-        String formatted = formatdate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        LocalDateTime date = LocalDateTime.parse(formatted, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        LocalDateTime date = LocalDateTime.now().withNano(0);
 
         queryFactory.update(bbs)
                 .set(bbs.rdcnt,bbsVO.getRdcnt())
@@ -261,6 +262,8 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
     @Transactional
     @Override
     public BbsVO insert(BbsVO bbsVO, List<MultipartFile> files, Map<String, String> userInfo) throws IOException, FdlException {
+
+        bbsVO.setNttCn(sanitizeBoardContent(bbsVO.getNttCn()));
 
         String attachFileId = null;
             if (!files.isEmpty()) {
@@ -277,6 +280,11 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
             if ("Y".equals(bbsVO.getAnswerAt())) {
                 bbsVO.setParntscttNo(Math.toIntExact(bbsVO.getNttId()));
                 BoardDTO boardDTO = selectboardDetail(bbsVO);
+
+                //2026.02.28 KISA 보안취약점 조치
+                if (boardDTO == null) {
+                    throw new IllegalStateException("답글 대상 원글을 찾을 수 없습니다.");
+                }
 
                 long nttId = boardIdGnrService.getNextLongId();
                 bbsVO.setNttNo(boardDTO.getNttNo() + 1);
@@ -313,6 +321,8 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
     @Override
     public BbsVO update(BbsVO bbsVO, List<MultipartFile> files, Map<String, String> userInfo) throws IOException, FdlException {
 
+            assertUpdateAuthorized(bbsVO, userInfo);
+
             if (!files.isEmpty()) {
                 List<FileVO> filsVOList = egovFileUtility.parseFile(files);
                 for (int i = 0; i < filsVOList.size(); i++) {
@@ -323,14 +333,20 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
 
 //            BoardDTO dto = repository.selectBbsDetail(bbsVO.getBbsId(), bbsVO.getNttId());
             BoardDTO dto = selectboardDetail(bbsVO);
+            //2026.02.28 KISA 보안취약점 조치
+            if (dto == null) {
+                throw new IllegalStateException("수정 대상 글을 찾을 수 없습니다.");
+            }
             dto.setNoticeAt(bbsVO.getNoticeAt());
             dto.setSecretAt(bbsVO.getSecretAt());
             dto.setSjBoldAt(bbsVO.getSjBoldAt());
-            dto.setNttCn(bbsVO.getNttCn());
+            dto.setNttCn(sanitizeBoardContent(bbsVO.getNttCn()));
             dto.setNttSj(bbsVO.getNttSj());
             dto.setNtceBgnde(bbsVO.getNtceBgnde());
             dto.setNtceEndde(bbsVO.getNtceEndde());
-            dto.setAtchFileId(bbsVO.getAtchFileId());
+            if (StringUtils.isNotBlank(bbsVO.getAtchFileId())) {
+                dto.setAtchFileId(bbsVO.getAtchFileId());
+            }
             BeanUtils.copyProperties(dto, bbsVO);
 
             bbsVO.setLastUpdtPnttm(String.valueOf(LocalDateTime.now()));
@@ -345,10 +361,23 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
     }
 
     @Override
-    public BbsVO delete(BbsVO bbsVO) {
+    public BbsVO delete(BbsVO bbsVO, Map<String, String> userInfo) {
         BbsId bbsId = new BbsId();
         bbsId.setBbsId(bbsVO.getBbsId());
         bbsId.setNttId(bbsVO.getNttId());
+
+        Bbs bbs = repository.findById(bbsId).orElseThrow(() ->
+                new IllegalStateException("삭제 대상 글을 찾을 수 없습니다."));
+        if (!"Y".equals(bbs.getUseAt())) {
+            throw new IllegalStateException("삭제 대상 글을 찾을 수 없습니다.");
+        }
+
+        assertDeleteAuthorized(bbs, userInfo);
+
+        // 클라이언트 입력 대신 DB 기준으로 분기에 필요한 필드를 채운다.
+        bbsVO.setNoticeAt(bbs.getNoticeAt());
+        bbsVO.setSortOrdr(bbs.getSortOrdr());
+        bbsVO.setAnswerAt(bbs.getAnswerAt());
 
         // 메인(최상위)게시글인 경우
         if ("N".equals(bbsVO.getNoticeAt())) {
@@ -368,7 +397,6 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
                 }
             }
         } else {  // 답글인 경우
-            Bbs bbs = repository.findById(bbsId).get();
             List<Comment> commentList = egovCommentRepository.findAllByCommentId_BbsIdAndCommentId_NttId(bbsId.getBbsId(), bbsId.getNttId());
             bbs.setUseAt("N");
             for (Comment comment : commentList) {
@@ -382,6 +410,70 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
         syncLogProcess(bbsVO);
 
         return bbsVO;
+    }
+
+    private void assertDeleteAuthorized(Bbs bbs, Map<String, String> userInfo) {
+        assertAuthorActionAuthorized(bbs, userInfo, BoardAuthorAction.DELETE);
+    }
+
+    @Override
+    public void assertUpdateAuthorized(BbsVO bbsVO, Map<String, String> userInfo) {
+        BbsId bbsId = new BbsId();
+        bbsId.setBbsId(bbsVO.getBbsId());
+        bbsId.setNttId(bbsVO.getNttId());
+
+        Bbs bbs = repository.findById(bbsId).orElseThrow(() ->
+                new IllegalStateException("수정 대상 글을 찾을 수 없습니다."));
+        if (!"Y".equals(bbs.getUseAt())) {
+            throw new IllegalStateException("수정 대상 글을 찾을 수 없습니다.");
+        }
+
+        assertAuthorActionAuthorized(bbs, userInfo, BoardAuthorAction.UPDATE);
+    }
+
+    /**
+     * 작성자와 동일한지 검사. 메시지만 삭제/수정에 따라 다름.
+     */
+    private void assertAuthorActionAuthorized(Bbs bbs, Map<String, String> userInfo, BoardAuthorAction action) {
+        String uniqId = userInfo != null ? userInfo.get("uniqId") : null;
+        if (ObjectUtils.isEmpty(uniqId)) {
+            throw new IllegalStateException("인증 정보가 없습니다.");
+        }
+
+        String authorId = bbs.getFrstRegisterId();
+        if (ObjectUtils.isEmpty(authorId)) {
+            throw new IllegalStateException(action.getForbiddenMessage());
+        }
+
+        // 익명 게시글은 작성자 식별자가 고정 문자열이라 JWT 기준 본인 확인이 불가능
+        if ("annoymous".equals(authorId)) {
+            throw new IllegalStateException(action.getAnonymousNotAllowedMessage());
+        }
+
+        if (!Objects.equals(uniqId, authorId)) {
+            throw new IllegalStateException(action.getForbiddenMessage());
+        }
+    }
+
+    private enum BoardAuthorAction {
+        DELETE("삭제 권한이 없습니다.", "익명 게시글은 이 경로에서 삭제할 수 없습니다."),
+        UPDATE("수정 권한이 없습니다.", "익명 게시글은 이 경로에서 수정할 수 없습니다.");
+
+        private final String forbiddenMessage;
+        private final String anonymousNotAllowedMessage;
+
+        BoardAuthorAction(String forbiddenMessage, String anonymousNotAllowedMessage) {
+            this.forbiddenMessage = forbiddenMessage;
+            this.anonymousNotAllowedMessage = anonymousNotAllowedMessage;
+        }
+
+        String getForbiddenMessage() {
+            return forbiddenMessage;
+        }
+
+        String getAnonymousNotAllowedMessage() {
+            return anonymousNotAllowedMessage;
+        }
     }
 
     private void parntsItem(String bbsId, long nttId) {
@@ -415,7 +507,7 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
                 syncLog.setRegistPnttm(LocalDateTime.now());
                 bbsSyncLogRepository.save(syncLog);
 
-                // 게시글 저장 후 이벤트 발행
+                // 트랜잭션 커밋 후 이벤트 발행 (커밋 전 발행 시 EgovSearch에서 SyncLog 미조회 race condition 방지)
                 BoardEvent event = BoardEvent.builder()
                         .eventType(BoardEventType.CREATE)
                         .nttId(bbsVO.getNttId())
@@ -425,9 +517,23 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
                         .eventDateTime(LocalDateTime.now())
                         .build();
 
-                streamBridge.send("searchProducer-out-0", event);
+                if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            try {
+                                streamBridge.send("searchProducer-out-0", event);
+                            } catch (Exception ex) {
+                                log.warn("Failed to send event to RabbitMQ after commit: {}", ex.getMessage());
+                            }
+                        }
+                    });
+                } else {
+                    streamBridge.send("searchProducer-out-0", event);
+                }
+            //2026.02.28 KISA 보안취약점 조치
             } catch (Exception e) {
-                log.warn("Failed to send event to RabbitMQ. Event will be processed later via COMTNBBSSYNCLOG: {}", e.getMessage());
+                log.warn("Failed to process syncLog or send event to RabbitMQ: {}", e.getMessage());
             }
         }
     }
@@ -525,6 +631,13 @@ public class EgovBoardServiceImpl extends EgovAbstractServiceImpl implements Ego
                 0,
                 bbsNm
         );
+    }
+
+    private String sanitizeBoardContent(String html) {
+        if (html == null) {
+            return null;
+        }
+        return Jsoup.clean(html, Safelist.relaxed());
     }
 
 }

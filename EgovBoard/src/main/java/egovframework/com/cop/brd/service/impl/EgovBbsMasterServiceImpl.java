@@ -4,6 +4,7 @@ import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import egovframework.com.cop.brd.entity.*;
 import egovframework.com.cop.brd.repository.EgovBbsMasterOptnRepository;
+import egovframework.com.cop.brd.repository.EgovBbsMasterRepository;
 import egovframework.com.cop.brd.service.BbsMasterDTO;
 import egovframework.com.cop.brd.service.BbsMasterOptnVO;
 import egovframework.com.cop.brd.service.BbsMasterVO;
@@ -21,6 +22,7 @@ import java.util.Objects;
 public class EgovBbsMasterServiceImpl extends EgovAbstractServiceImpl implements EgovBbsMasterService {
 
     private final EgovBbsMasterOptnRepository optnRepository;
+    private final EgovBbsMasterRepository masterRepository;
     private final JPAQueryFactory queryFactory;
 
     @Override
@@ -93,6 +95,16 @@ public class EgovBbsMasterServiceImpl extends EgovAbstractServiceImpl implements
         } else {
             return null;
         }
+    }
+
+    @Override
+    public boolean isBbsMasterOptnAccessible(String bbsId, String uniqId) {
+        if (bbsId == null || bbsId.isBlank() || uniqId == null || uniqId.isBlank()) {
+            return false;
+        }
+        return masterRepository.findById(bbsId)
+                .map(bm -> "Y".equals(bm.getUseAt()))
+                .orElse(false);
     }
 
 }

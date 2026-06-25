@@ -1,0 +1,5 @@
+# 텍스트 파일은 자동(작성 시 LF, Windows 클론 시 CRLF)
+* text=auto
+
+# 모든 텍스트 파일은 클론 시 CRLF로 자동 변환 (Windows 우선)
+* text eol=crlf

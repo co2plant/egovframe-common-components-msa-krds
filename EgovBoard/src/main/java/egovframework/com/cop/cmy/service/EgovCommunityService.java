@@ -8,7 +8,7 @@ public interface EgovCommunityService {
 
     Page<CommunityDTO> list(CommunityVO communityVO);
 
-    CommunityDTO detail(CommunityVO communityVO);
+    CommunityDTO detail(CommunityVO communityVO, Map<String, String> userInfo);
 
     CommunityVO insert(CommunityVO communityVO, Map<String, String> userInfo);
 

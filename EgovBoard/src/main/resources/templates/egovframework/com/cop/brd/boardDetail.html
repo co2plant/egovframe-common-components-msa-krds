@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title th:text="#{comCopBbs.articleVO.title}+' '+#{title.detail}"></title>
-    <div th:replace="cop/brd/fragment/linkFragment"></div>
+    <div th:replace="~{cop/brd/fragment/linkFragment}"></div>
 </head>
 
 <body>
@@ -71,6 +71,24 @@
     let nttId = document.getElementById('nttId').value
     let userId = "";
 
+    function escapeHtml(s) {
+        if (s == null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+    function escapeJs(s) {
+        if (s == null || s === undefined) return '';
+        return String(s)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r');
+    }
+
     boardDetail();
     fn_egov_bbs_master_optn(bbsId, nttId);
 
@@ -79,12 +97,6 @@
         detailForm.method = 'POST';
         detailForm.action = '/cop/brd/boardListView';
         detailForm.submit();
-    }
-
-    function decodeHTML(html) {
-        var textarea = document.createElement("textarea");
-        textarea.innerHTML = html;
-        return textarea.value;
     }
 
     function boardDetail() {
@@ -102,7 +114,8 @@
                 $('#frstRegisterId').text(response.result.userNm);
                 $('#frstRegistPnttm').text(response.result.frstRegistPnttm);
                 $('#rdcnt').text(response.result.rdcnt);
-                $('#nttCn').html(decodeHTML(response.result.nttCn));
+                const nttCnElement = document.getElementById('nttCn');
+                nttCnElement.textContent = response.result.nttCn != null ? response.result.nttCn : '';
                 $('#ntceDe').text(response.result.ntceBgnde+' ~ '+response.result.ntceEndde);
                 renderArticleDetail(response);
                 // 공지사항인 경우 답글 비활성화
@@ -237,8 +250,15 @@
                     const atchFiles = document.querySelector('.atchfiles ul');
                     result.forEach(item => {
                         const li = document.createElement('li');
-                        li.innerHTML = `<a href = "#" id="fileDownload" onclick="fileDownload('${item.atchFileId}','${item.orignlFileNm}')">${item.orignlFileNm}</a>`;
-                        atchFiles.appendChild(li)
+                        const a = document.createElement('a');
+                        a.href = '#';
+                        a.textContent = item.orignlFileNm != null ? item.orignlFileNm : '';
+                        a.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            fileDownload(item.atchFileId, item.orignlFileNm);
+                        });
+                        li.appendChild(a);
+                        atchFiles.appendChild(li);
                     });
                 })
                 .catch(error => console.error("Error fetching attached files:", error));
@@ -262,18 +282,18 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ bbsId: bbsId, nttId: nttId })
         })
-            .then(response => {
+            .then(async function (response) {
+                const text = await response.text();
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    alert(text && text.trim() ? text : '요청 처리 중 오류가 발생했습니다.');
+                    return;
                 }
-                return response.text();
-            })
-            .then(data => {
-                alert(data);
+                alert(text);
                 boardList();
             })
-            .catch(error => {
-                console.log(error);
+            .catch(function (error) {
+                console.error(error);
+                alert('요청 처리 중 오류가 발생했습니다.');
             });
 
     }
@@ -332,16 +352,20 @@
                     document.querySelector(".krds-pagination").style.display = "none";
                 } else {
                     response.content.forEach(item => {
-                        const commentList = `<li>
-                                            <p class="info-top">
-                                                <span class="user-info" style="width:100%"><span class="txt" style="font-weight: bold;">${item.wrterNm}</span> | <span class="i-date">${item.frstRegistPnttm.replace("T", " ")}</span></span>
-                                                ${item.frstRegisterId === userId ? `<button type="button" class="krds-btn medium icon btn-close close-modal"
-                                                                                    onclick="fn_egov_comment_delete('${item.bbsId}',${item.nttId},${item.answerNo})">
+                        const safeNm = escapeHtml(item.wrterNm || '');
+                        const safeDt = escapeHtml(String(item.frstRegistPnttm || '').replace("T", " "));
+                        const safeAnswer = escapeHtml(item.answer || '');
+                        const delBtn = item.frstRegisterId === userId ? `<button type="button" class="krds-btn medium icon btn-close close-modal"
+                                                                                    onclick="fn_egov_comment_delete('${escapeJs(String(item.bbsId))}',${item.nttId},${item.answerNo})">
                                                                                         <span class="sr-only" th:text="#{button.close}"></span>
                                                                                         <i class="svg-icon ico-popup-close"></i>
-                                                                                    </button>`:""}
+                                                                                    </button>` : '';
+                        const commentList = `<li>
+                                            <p class="info-top">
+                                                <span class="user-info" style="width:100%"><span class="txt" style="font-weight: bold;">${safeNm}</span> | <span class="i-date">${safeDt}</span></span>
+                                                ${delBtn}
                                             </p>
-                                            <div class="info-body"><div class="in"><div class="text"><p class="txt">${item.answer}</p></div></div></div>
+                                            <div class="info-body"><div class="in"><div class="text"><p class="txt">${safeAnswer}</p></div></div></div>
                                          </li>`;
                         document.querySelector("#comment-list").insertAdjacentHTML("beforeend", commentList);
                     });
@@ -383,7 +407,9 @@
      * 댓글 입력 시 글자 수 카운트
      *********************************************************/
     function fn_comment_count() {
-        document.querySelector("#answer").addEventListener("keyup", function (e) {
+        const answerEl = document.querySelector("#answer");
+        if (!answerEl) return;
+        answerEl.addEventListener("keyup", function (e) {
             const maxCnt = 200;
             const comment = this.value;
             let commentLen = 0;
@@ -464,19 +490,25 @@
                     document.querySelector(".krds-pagination").style.display = "none";
                 } else {
                     response.forEach(item => {
-                        const stsfdgList = `<li>
-                                        <p class="info-top">
-                                            <span class="user-info" style="width:100%"><span class="txt" style="font-weight: bold;">${item.wrterNm}</span> | <span class="i-date">${item.frstRegistPnttm.replace("T", " ")}</span></span>
-                                            ${item.frstRegisterId === userId ? `<button type="button" class="krds-btn medium icon btn-close close-modal"
-                                                                                onclick="fn_egov_satisfaction_delete('${item.bbsId}',${item.nttId},${item.stsfdgNo})">
+                        const safeNm = escapeHtml(item.wrterNm || '');
+                        const safeDt = escapeHtml(String(item.frstRegistPnttm || '').replace("T", " "));
+                        const safeCn = escapeHtml(item.stsfdgCn || '');
+                        const starW = Number.isFinite(Number(item.stsfdg)) ? Number(item.stsfdg) : 0;
+                        const starLabel = escapeHtml(starW.toFixed(1));
+                        const delBtn = item.frstRegisterId === userId ? `<button type="button" class="krds-btn medium icon btn-close close-modal"
+                                                                                onclick="fn_egov_satisfaction_delete('${escapeJs(String(item.bbsId))}',${item.nttId},'${escapeJs(String(item.stsfdgNo))}')">
                                                                                     <span class="sr-only" th:text="#{button.close}"></span>
                                                                                     <i class="svg-icon ico-popup-close"></i>
-                                                                                </button>`: ""}
+                                                                                </button>` : '';
+                        const stsfdgList = `<li>
+                                        <p class="info-top">
+                                            <span class="user-info" style="width:100%"><span class="txt" style="font-weight: bold;">${safeNm}</span> | <span class="i-date">${safeDt}</span></span>
+                                            ${delBtn}
                                         </p>
                                         <div class="stsfdg-area">
-                                            <span class="star" style="color:lightgray">★★★★★<span style="width:${item.stsfdg * 20}%">★★★★★</span></span>&nbsp<span>${item.stsfdg.toFixed(1)}</span>
+                                            <span class="star" style="color:lightgray">★★★★★<span style="width:${starW * 20}%">★★★★★</span></span>&nbsp;<span>${starLabel}</span>
                                         </div>
-                                        <div class="info-body"><div class="in"><div class="text"><p class="txt">${item.stsfdgCn}</p></div></div></div>
+                                        <div class="info-body"><div class="in"><div class="text"><p class="txt">${safeCn}</p></div></div></div>
                                      </li>`;
                         document.querySelector("#satisfaction-list").insertAdjacentHTML("beforeend", stsfdgList);
                     });

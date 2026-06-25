@@ -15,9 +15,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.util.ObjectUtils;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Objects;
 
 @Service("brdEgovCommentService")
 public class EgovCommentServiceImpl extends EgovAbstractServiceImpl implements EgovCommentService {
@@ -63,7 +65,7 @@ public class EgovCommentServiceImpl extends EgovAbstractServiceImpl implements E
     }
 
     @Override
-    public void deleteArticleComment(CommentVO commentVO) {
+    public void deleteArticleComment(CommentVO commentVO, Map<String, String> userInfo) {
         CommentId commentId = new CommentId();
         commentId.setBbsId(commentVO.getBbsId());
         commentId.setNttId(commentVO.getNttId());
@@ -71,12 +73,27 @@ public class EgovCommentServiceImpl extends EgovAbstractServiceImpl implements E
 
         Comment comment = commentRepository.findById(commentId).orElse(null);
 
-        if (comment != null) {
-            comment.setLastUpdusrId(comment.getFrstRegisterId());
-            comment.setLastUpdtPnttm(LocalDateTime.now());
-            comment.setUseAt("N");
-            commentRepository.save(comment);
+        if (comment == null) {
+            throw new IllegalStateException("댓글을 찾을 수 없습니다.");
         }
+
+        String uniqId = userInfo != null ? userInfo.get("uniqId") : null;
+        if (ObjectUtils.isEmpty(uniqId)) {
+            throw new IllegalStateException("인증 정보가 없습니다.");
+        }
+
+        String ownerId = comment.getFrstRegisterId();
+        if (ObjectUtils.isEmpty(ownerId)) {
+            ownerId = comment.getWrterId();
+        }
+        if (ObjectUtils.isEmpty(ownerId) || !Objects.equals(uniqId, ownerId)) {
+            throw new IllegalStateException("삭제 권한이 없습니다.");
+        }
+
+        comment.setLastUpdusrId(uniqId);
+        comment.setLastUpdtPnttm(LocalDateTime.now());
+        comment.setUseAt("N");
+        commentRepository.save(comment);
     }
 
 }

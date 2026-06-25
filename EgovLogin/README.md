@@ -2,6 +2,19 @@
 
 아이디와 비밀번호를 통한 로그인을 진행하고 인증토큰을 받아 처리하는 컴포넌트
 
+## 서비스 상태 (현재 모듈 기준)
+
+| 항목 | 내용 |
+|------|------|
+| **역할** | 로그인·JWT(Access/Refresh) 쿠키 발급·재발급·로그아웃 |
+| **애플리케이션명** | `EgovLogin` → Eureka `EGOVLOGIN` |
+| **포트** | `0`(랜덤). **Gateway** `http://localhost:9000/uat/uia/...` |
+| **Config Server** | 사용 |
+| **Eureka** | 등록 |
+| **필수** | **Redis** (`spring.data.redis`, 기본 `localhost:6379`) — 로그인·세션 연동 |
+
+※ **로그인정책(IP 제한 등)** 은 별도 모듈 `EgovLoginPolicy` (`/uat/uap`) 이다.
+
 ## 프로젝트 구성
 
 ``` text
@@ -26,8 +39,7 @@
     └ pom.xml
 ```
 
-- 로그인정책관리 (`/com/uat/uap`)
-- 로그인 (`/com/uat/uia`)
+- 로그인 (`/uat/uia`)
 
 ## 화면 구성
 
@@ -127,7 +139,22 @@
         }
   ```
 
+### 3. Redis 구성방법 - Docker 이미지를 이용
+- Docker Desktop을 이용중이라면 검색창에서 'redis'검색 후 Image Pull
+- 필요한 docker 설정으로 docker run 명령어 실행</br>
+  `docker run -d --name egov-redis -p 6379:6379 -e REDIS_PASSWORD=rhdxhd12 redis:7-alpine redis-server --requirepass rhdxhd12`
+    - --name <컨테이너명>
+    - -p <포트>
+    - -e REDIS_PASSWORD=<Redis에서 사용할 비밀번호>
+    - <redis 이미지 이름>
+- AuthorizeTokenRedisConfig에서 설정한 값과 동일하게 서버 실행 필요
+- 로그인 후 redis-cli를 통해 등록된 key값을 확인할 수 있다.
+    - docker redis의 cli 접속 : `docker exec -it egov-redis redis-cli -a rhdxhd12`
+    - 등록된 모든 키 값 확인 : `keys *`
+    - 특정 Key의 값 확인 : `get <KEY값>`
 
 ## 유의사항
+
+- 본 모듈 `pom.xml` 기준 **Java 17**. Redis 미기동 시 로그인 관련 기능이 실패할 수 있다.
 
 ## 참조

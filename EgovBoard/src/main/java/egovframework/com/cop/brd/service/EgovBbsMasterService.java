@@ -6,4 +6,6 @@ public interface EgovBbsMasterService {
 
     BbsMasterOptnVO selectBBSMasterOptn(String bbsId);
 
+    boolean isBbsMasterOptnAccessible(String bbsId, String uniqId);
+
 }

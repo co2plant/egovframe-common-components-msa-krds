@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title th:text="#{comCopBbs.articleVO.title}+' '+#{title.update}"></title>
-    <div th:replace="cop/brd/fragment/linkFragment"></div>
+    <div th:replace="~{cop/brd/fragment/linkFragment}"></div>
     <style>
         .textarea-wrap .ck-content{
             height:300px;
@@ -145,8 +145,8 @@
                 editorInstance = editor; // 전역 변수에 저장
                 // 데이터 설정
                 // editor.setData(initialData);
-                editor.setData(decodeHtml(initialData));
-                document.getElementById("nttCn").value=decodeHtml(initialData);
+                editor.setData(initialData || '');
+                document.getElementById("nttCn").value = initialData || '';
                 // 에디터 변경 감지하여 nttCn 업데이트
                 editor.model.document.on('change:data', () => {
                     document.getElementById("nttCn").value = editor.getData();
@@ -158,6 +158,16 @@
     };
 </script>
 <script th:inline="javascript">
+    function escapeHtml(s) {
+        if (s == null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     const bbsId = document.getElementById("bbsId").value;
     const nttId = document.getElementById("nttId").value;
     const answerAt = document.getElementById("answerAt").value;
@@ -277,7 +287,7 @@
             li.id = `file_${index}`;
             li.innerHTML = `
             <div class="file-info">
-                <div class="file-name">${name} [${type}], ${formatBytes(size)}]</div>
+                <div class="file-name">${escapeHtml(name)} [${escapeHtml(type)}], ${formatBytes(size)}]</div>
                 <div class="btn-wrap" onclick="fileDel(${index}, ${sn})">
                     <button type="button" class="krds-btn medium text">삭제<i class='svg-icon ico-delete-fill'></i></button>
                 </div>
@@ -300,7 +310,7 @@
             listItem.id = `file_${index}`;
             listItem.innerHTML = `
                 <div class='file-info'>
-                    <div class='file-name'>${item.orignlFileNm} [${item.fileExtsn}, ${formatBytes(item.fileSize)}]</div>
+                    <div class='file-name'>${escapeHtml(item.orignlFileNm)} [${escapeHtml(item.fileExtsn)}, ${formatBytes(item.fileSize)}]</div>
                     <div class='btn-wrap'>
                         <button type='button' class='krds-btn medium text' onclick='fileDel(${index}, ${sn})'>
                             삭제<i class='svg-icon ico-delete-fill'></i>
@@ -384,9 +394,8 @@
                     document.getElementById("sjBoldAt").checked = true;
                 }
 
-                const decodedNttCn = decodeHtml(result.nttCn);
                 if (window.initEditor) {
-                    window.initEditor(decodedNttCn);
+                    window.initEditor(result.nttCn || '');
                 } else {
                     console.error("initEditor 함수가 정의되지 않았습니다.");
                 }
@@ -408,12 +417,6 @@
                 }
             }
         });
-    }
-
-    function decodeHtml(html) {
-        let txt = document.createElement("textarea");
-        txt.innerHTML = html;
-        return txt.value;
     }
 
     boardDetail();
@@ -476,6 +479,10 @@
                     alert('[(#{success.common.update})]');
                     boardList();
                 }
+            }).fail(function(xhr) {
+                var raw = xhr.responseText;
+                var msg = (raw && String(raw).trim()) ? String(raw).trim() : '[(#{fail.common.update})]';
+                alert(msg);
             });
         }
     }

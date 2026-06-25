@@ -10,6 +10,6 @@ public interface EgovStsfdgService {
 
     int insertStsfdg(StsfdgVO stsfdgVO, Map<String, String> userInfo) throws FdlException;
 
-    int deleteStsfdg(String stsfdgNo);
+    int deleteStsfdg(String stsfdgNo, Map<String, String> userInfo);
 
 }

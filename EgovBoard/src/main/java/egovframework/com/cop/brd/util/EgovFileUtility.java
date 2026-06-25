@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
@@ -33,6 +34,9 @@ public class EgovFileUtility {
     private Long maxFileSize;
 
     private final EgovEnvCryptoServiceImpl egovEnvCryptoService;
+
+    private static final Pattern UNSAFE_FILENAME_CHARS =
+            Pattern.compile("[\\p{Cntrl}<>:\"/\\\\|?*]");
 
     public List<FileVO> parseFile(List<MultipartFile> files) throws IOException {
         List<FileVO> result = new ArrayList<>();
@@ -52,7 +56,12 @@ public class EgovFileUtility {
 
             boolean isValid = true;
             String originalFileName = file.getOriginalFilename();
-            Path targetPath = Paths.get(uploadDir).resolve(originalFileName).normalize();
+            if (originalFileName == null || originalFileName.isBlank()) {
+                continue;
+            }
+
+            String safeName = sanitizeFilename(originalFileName);
+            Path targetPath = Paths.get(uploadDir).resolve(safeName).normalize();
 
             if (file.isEmpty()) {
                 log.warn("##### Skipping empty file");
@@ -63,7 +72,7 @@ public class EgovFileUtility {
             } else if (!targetPath.startsWith(Paths.get(uploadDir))) {
                 log.error("##### Invalid file path");
                 isValid = false;
-            } else if (!validFileType(file) || !validFileExtension(originalFileName)) {
+            } else if (!validFileType(file) || !validFileExtension(safeName)) {
                 log.error("##### File type not allowed");
                 isValid = false;
             }
@@ -74,7 +83,7 @@ public class EgovFileUtility {
             }
 
             // Proceed with file processing
-            String newFileName = newFileName(originalFileName);
+            String newFileName = newFileName(safeName);
             File destinationFile = new File(uploadDir, newFileName);
             file.transferTo(destinationFile);
 
@@ -83,8 +92,9 @@ public class EgovFileUtility {
             fileVO.setFileSn(String.valueOf(fileSn++));
             fileVO.setFileStreCours(uploadDir);
             fileVO.setStreFileNm(newFileName);
-            fileVO.setOrignlFileNm(originalFileName);
-            fileVO.setFileExtsn(originalFileName.substring(originalFileName.lastIndexOf(".") + 1));
+            fileVO.setOrignlFileNm(safeName);
+            int dot = safeName.lastIndexOf('.');
+            fileVO.setFileExtsn(dot >= 0 ? safeName.substring(dot + 1) : "");
             fileVO.setFileSize(file.getSize());
             result.add(fileVO);
         }
@@ -99,8 +109,27 @@ public class EgovFileUtility {
     }
 
     private boolean validFileExtension(String fileName) {
-        String extension = fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
+        int dot = fileName.lastIndexOf('.');
+        if (dot < 0 || dot == fileName.length() - 1) {
+            return false;
+        }
+        String extension = fileName.substring(dot + 1).toLowerCase();
         return Arrays.asList(allowedExtensions.split(",")).contains(extension);
+    }
+
+    private String sanitizeFilename(String original) {
+        if (original == null) {
+            return "untitled";
+        }
+        String name = original.replaceAll("[\\\\/]", "_");
+        name = UNSAFE_FILENAME_CHARS.matcher(name).replaceAll("_");
+        if (name.length() > 200) {
+            name = name.substring(0, 200);
+        }
+        if (name.isBlank()) {
+            name = "untitled";
+        }
+        return name;
     }
 
     private String newFileName(String fileName) {

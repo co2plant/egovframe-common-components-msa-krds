@@ -19,6 +19,8 @@ public interface EgovBoardService {
 
     BbsVO update(BbsVO bbsVO, List<MultipartFile> files, Map<String, String> userInfo) throws IOException, FdlException;
 
-    BbsVO delete(BbsVO bbsVO);
+    BbsVO delete(BbsVO bbsVO, Map<String, String> userInfo);
+
+    void assertUpdateAuthorized(BbsVO bbsVO, Map<String, String> userInfo);
 
 }

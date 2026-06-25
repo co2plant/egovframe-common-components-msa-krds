@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title th:text="#{comCopBbs.articleVO.title}+' '+#{title.create}"></title>
-    <div th:replace="cop/brd/fragment/linkFragment"></div>
+    <div th:replace="~{cop/brd/fragment/linkFragment}"></div>
     <style>
         .textarea-wrap .ck-content{
             height:300px;
@@ -154,6 +154,16 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 
 <script th:inline="javascript" defer>
+    function escapeHtml(s) {
+        if (s == null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     const sjBoldAt = document.getElementById('sjBoldAt');
     const noticeAt = document.getElementById('noticeAt');
     const secretAt = document.getElementById('secretAt');
@@ -257,9 +267,10 @@ document.addEventListener("DOMContentLoaded", function () {
         fileList.forEach((item, index) => {
             const li = document.createElement("li");
             li.id = `file_${index}`;
+            const typePart = (item.type && item.type.split("/")[1]) ? item.type.split("/")[1] : '';
             li.innerHTML = `
                 <div class="file-info">
-                    <div class="file-name">${item.name} [${item.type.split("/")[1]}, ${formatBytes(item.size)}]</div>
+                    <div class="file-name">${escapeHtml(item.name)} [${escapeHtml(typePart)}, ${formatBytes(item.size)}]</div>
                     <div class="btn-wrap" onclick="fileDel(${index}, 1)">
                         <button type="button" class="krds-btn medium text">삭제<i class='svg-icon ico-delete-fill'></i></button>
                     </div>

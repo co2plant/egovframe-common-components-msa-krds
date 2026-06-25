@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title th:text="#{comExtOps.comQaOpsInfoVO.textSearch.result}"></title>
-    <div th:replace="ext/ops/fragment/linkFragment"></div>
+    <div th:replace="~{ext/ops/fragment/linkFragment}"></div>
 </head>
 
 <body>
@@ -62,99 +62,228 @@
     $(document).ready(function() {
         Listpaging();
     });
-    
+
     function truncateText(text, maxLength) {
-        if (!text) return '';
+        if (!text) return "";
         if (text.length <= maxLength) return text;
         return text.substring(0, maxLength);
     }
 
     function toggleContent(btn) {
         if (!btn) return;
-        
+
         const contentWrapper = btn.previousElementSibling;
         if (!contentWrapper) return;
-        
-        const fullText = contentWrapper.getAttribute('data-full-content');
+
+        const fullText = contentWrapper.dataset.fullContent;
         if (!fullText) return;
-        
+
         contentWrapper.textContent = fullText;
-        btn.style.display = 'none';  // 더보기 버튼 숨기기
+        btn.style.display = "none";
     }
-    
+
+    function appendChildWithText(parent, tagName, className, text) {
+        const element = document.createElement(tagName);
+        if (className) element.className = className;
+        if (text != null) element.textContent = text;
+        parent.appendChild(element);
+        return element;
+    }
+
+    function buildSearchItem(item, accuracyLabel) {
+        const fullContent = item.nttCn || "";
+        const truncatedContent = truncateText(fullContent, 200);
+
+        const li = document.createElement("li");
+        li.className = "search_item";
+
+        const headerP = appendChildWithText(li, "p", "search_item_header");
+        appendChildWithText(headerP, "span", "krds-badge outline-information", item.bbsNm || "");
+
+        const headerRight = appendChildWithText(headerP, "span", "search_item_header_right");
+        appendChildWithText(headerRight, "span", null,
+            item.frstRegistPnttm ? item.frstRegistPnttm.substring(0, 10) : "");
+        appendChildWithText(headerRight, "span", null, item.ntcrNm || "");
+
+        const bodyDiv = appendChildWithText(li, "div", "search_item_body");
+        appendChildWithText(bodyDiv, "h2", null, item.nttSj || "");
+
+        const contentP = appendChildWithText(bodyDiv, "p", "search_item_body_contents", truncatedContent);
+        contentP.dataset.fullContent = fullContent;
+
+        const footerDiv = appendChildWithText(li, "div", "search_itm_btm");
+        const footerP = appendChildWithText(footerDiv, "p");
+        appendChildWithText(footerP, "span", null, accuracyLabel + " : ");
+        appendChildWithText(footerP, "strong", null, item.score ? item.score.toFixed(2) : "0.00");
+
+        return li;
+    }
+
+    /*
+     * 페이지네이션 sanitizer
+     * - 서버(EgovPaginationFormat)에서 내려오는 HTML을 신뢰하지 않고,
+     *   허용된 태그와 속성만으로 새 DOM을 재조립한다.
+     * - <a>·<button>은 <button type="button">으로 통일하여 href="javascript:..." 위험 제거.
+     * - 클릭 동작은 sourceNode에서 페이지 번호만 추출한 뒤 addEventListener로 부착.
+     */
+
+    function extractPageIndex(element) {
+        const onclickValue = element.getAttribute("onclick") || "";
+        const hrefValue = element.getAttribute("href") || "";
+        const combinedValue = onclickValue + " " + hrefValue;
+
+        // 함수 호출 인자(예: linkPage(2), goPage('2'))의 첫 번째 정수
+        const functionMatch = combinedValue.match(/\(['"]?(\d+)['"]?\)/);
+        if (functionMatch) return functionMatch[1];
+
+        // 쿼리스트링(예: ?pageIndex=2)
+        const queryMatch = combinedValue.match(/pageIndex=(\d+)/);
+        if (queryMatch) return queryMatch[1];
+
+        // 텍스트 노드(숫자 페이지 라벨)
+        const text = element.textContent ? element.textContent.trim() : "";
+        if (/^\d+$/.test(text)) return text;
+
+        return "";
+    }
+
+    function copySafeAttributes(source, target) {
+        const allowedAttributes = ["class", "title", "aria-label", "aria-current", "role"];
+        const safeValuePattern = /^[a-zA-Z0-9가-힣_\-\s]+$/;
+
+        allowedAttributes.forEach(function(attributeName) {
+            const value = source.getAttribute(attributeName);
+            // 허용 문자만 통과: 영숫자/한글/언더스코어/하이픈/공백.
+            // onclick·href·style 등 실행/URL 기반 속성은 화이트리스트 자체에 없음.
+            if (value && safeValuePattern.test(value)) {
+                target.setAttribute(attributeName, value);
+            }
+        });
+    }
+
+    function createSafePaginationNode(sourceNode) {
+        if (sourceNode.nodeType === Node.TEXT_NODE) {
+            return document.createTextNode(sourceNode.textContent || "");
+        }
+        if (sourceNode.nodeType !== Node.ELEMENT_NODE) {
+            return null;
+        }
+
+        const tagName = sourceNode.tagName.toLowerCase();
+        const allowedTags = ["div", "nav", "ul", "ol", "li", "span", "strong", "em", "p", "button", "a"];
+
+        // 허용 외 태그는 자식만 추출하여 fragment로 반환 (구조는 깨지지만 텍스트 보존)
+        if (!allowedTags.includes(tagName)) {
+            const fragment = document.createDocumentFragment();
+            sourceNode.childNodes.forEach(function(childNode) {
+                const safeChild = createSafePaginationNode(childNode);
+                if (safeChild) fragment.appendChild(safeChild);
+            });
+            return fragment;
+        }
+
+        let targetNode;
+
+        if (tagName === "a" || tagName === "button") {
+            // <a>/<button>은 모두 <button type="button">으로 단일화
+            targetNode = document.createElement("button");
+            targetNode.setAttribute("type", "button");
+            copySafeAttributes(sourceNode, targetNode);
+
+            const sourceClass = sourceNode.getAttribute("class") || "";
+            const isActive = /\bactive\b/.test(sourceClass);
+            const pageIndex = extractPageIndex(sourceNode);
+
+            if (isActive || !pageIndex) {
+                // 현재 페이지 또는 페이지 번호 추출 실패 시 비활성화
+                targetNode.setAttribute("disabled", "disabled");
+            } else {
+                targetNode.addEventListener("click", function() {
+                    linkPage(pageIndex);
+                });
+            }
+        } else {
+            targetNode = document.createElement(tagName);
+            copySafeAttributes(sourceNode, targetNode);
+        }
+
+        sourceNode.childNodes.forEach(function(childNode) {
+            const safeChild = createSafePaginationNode(childNode);
+            if (safeChild) targetNode.appendChild(safeChild);
+        });
+
+        return targetNode;
+    }
+
+    function renderPagination(paginationHtml, paginationContainer) {
+        paginationContainer.replaceChildren();
+        if (!paginationHtml) return;
+
+        const parsedDocument = new DOMParser().parseFromString(paginationHtml, "text/html");
+        const fragment = document.createDocumentFragment();
+
+        parsedDocument.body.childNodes.forEach(function(childNode) {
+            const safeNode = createSafePaginationNode(childNode);
+            if (safeNode) fragment.appendChild(safeNode);
+        });
+
+        paginationContainer.appendChild(fragment);
+    }
+
     function Listpaging() {
-        document.getElementById("loading").style.display = "block";
-        document.getElementById('search_list').innerHTML = "";
+        const loading = document.getElementById("loading");
+        const searchList = document.getElementById("search_list");
+        const paginationContainer = document.querySelector(".krds-pagination.w-page");
+        const noResult = document.querySelector(".no-result");
+        const responseError = document.querySelector(".response-error");
+        const countElement = document.querySelector(".search_info li .count");
+
+        // 이전 호출의 잔상 제거: 결과/페이지네이션/메시지/카운트를 모두 초기화
+        loading.style.display = "block";
+        searchList.replaceChildren();
+        paginationContainer.replaceChildren();
+        noResult.style.display = "none";
+        responseError.style.display = "none";
+        if (countElement) countElement.textContent = "0";
 
         $.ajax({
             url: "/ext/ops/textSearchResult",
             type: "post",
-            data: $("#listForm").serialize(),
+            data: $("#listForm").serialize()
         }).done(function(result) {
-            let html = "";
-            let resultList = result.bbsTextSearchList;
+            const resultList = result.bbsTextSearchList || [];
+
             if (resultList.length > 0) {
-                for(let i=0; i<resultList.length; i++) {
-                    let item = resultList[i];
-                    let fullContent = item.nttCn || '';
-                    let truncatedContent = truncateText(fullContent, 200);
-                    let showMoreButton = fullContent.length > 200;
+                const accuracyLabel = '[(#{comExtOps.comQaOpsInfoVO.accuracy})]';
 
-                    const accuracy = '[(#{comExtOps.comQaOpsInfoVO.accuracy})]';
-                    document.querySelector('.search_info li .count').innerText=resultList.length;
+                if (countElement) countElement.textContent = String(resultList.length);
 
-                    html += `<li class="search_item">
-                                <p class="search_item_header">
-                                    <span class="krds-badge outline-information">${item.bbsNm || ''}</span>
-                                    <span class="search_item_header_right">
-                                        <span>${item.frstRegistPnttm ? item.frstRegistPnttm.substring(0,10) : ''}</span>
-                                        <span>${item.ntcrNm || ''}</span>
-                                    </span>
-                                </p>
-                                <div class="search_item_body">
-                                    <h2>${item.nttSj || ''}</h2>
-                                    <p class="search_item_body_contents" data-full-content="${fullContent.replace(/'/g, "&#39;")}">${truncatedContent}</p>
-                                </div>
-                                <div class="search_itm_btm">
-                                    <p>
-                                        <span>${accuracy + ' : '}</span>
-                                        <strong>${item.score ? item.score.toFixed(2) : '0.00'}</strong>
-                                    </p>
-                                </div>
-                            </li>`
-                }
+                const fragment = document.createDocumentFragment();
+                resultList.forEach(function(item) {
+                    fragment.appendChild(buildSearchItem(item, accuracyLabel));
+                });
+                searchList.appendChild(fragment);
 
-                document.getElementById('search_list').innerHTML = html;
-                document.querySelector(".no-result").style.display = "none";
-                document.querySelector(".response-error").style.display = "none";
-                
-                if (result.pagination) {
-                    document.querySelector(".krds-pagination.w-page").innerHTML = result.pagination;
-                }
+                renderPagination(result.pagination, paginationContainer);
             } else {
-                document.getElementById('search_list').innerHTML = '';
-                document.querySelector(".no-result").style.display = "block";
-                document.querySelector(".krds-pagination.w-page").innerHTML = "";
+                noResult.style.display = "block";
             }
         }).fail(function(jqXHR, textStatus, errorThrown) {
-            document.getElementById('search_list').innerHTML = "";
-            document.querySelector(".response-error").style.display = "block";
-            document.querySelector(".krds-pagination.w-page").innerHTML = "";
+            responseError.style.display = "block";
             console.error("Error details:", textStatus, errorThrown);
         }).always(function() {
-            document.getElementById("loading").style.display = "none";
+            loading.style.display = "none";
         });
     }
-    
+
     function linkPage(pageIndex) {
-        $('#pageIndex').val(pageIndex);
+        $("#pageIndex").val(pageIndex);
         Listpaging();
     }
 
     function searchHome(){
         window.location.href = '/ext/ops/searchPageView';
     }
-    
     </script>
 
 </body>

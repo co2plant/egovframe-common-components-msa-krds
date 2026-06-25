@@ -1,18 +1,27 @@
 server:
-    port: 9992 # random port
-    tomcat:
-      connection:
-        timeout: -1
+  port: 9992 # random port
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  tomcat:
+    connection:
+      timeout: -1
 
 spring:
   application:
-        name: EgovSearch
+    name: EgovSearch
   main:
     allow-bean-definition-overriding: true
   config:
     import: optional:configserver:http://localhost:8888
   profiles:
     active: local
+  thymeleaf:
+    encoding: UTF-8
+    mode: HTML
+    cache: false
   datasource:
     driver-class-name: ${datasource.driver-class-name:com.mysql.cj.jdbc.Driver}
     url: ${datasource.url:jdbc:mysql://localhost:3306/com}
@@ -77,6 +86,11 @@ eureka:
 
 management:
   endpoints:
+    access:
+      default: read-only # 기본적으로 모든 엔드포인트를 읽기 전용으로 설정
+    jmx:
+      exposure:
+        exclude: "*" # JMX에서 모든 엔드포인트 비활성화
     web:
       exposure:
         include: health, info
@@ -102,7 +116,7 @@ opensearch:
   username: admin
   password: yourStrongPassword123!
   keystore:
-    path: 
+    path:
     password: changeit
   text:
     indexname: text-bbs-index

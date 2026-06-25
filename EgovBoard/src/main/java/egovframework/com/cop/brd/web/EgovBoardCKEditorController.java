@@ -1,5 +1,8 @@
 package egovframework.com.cop.brd.web;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.egovframe.boot.crypto.service.impl.EgovEnvCryptoServiceImpl;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -12,12 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartRequest;
 
-import javax.annotation.PostConstruct;
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -97,8 +98,21 @@ public class EgovBoardCKEditorController {
 
     @GetMapping("/cop/brd/ckeditor/{filename}")
     public void ckeditorImage(@PathVariable String filename, HttpServletResponse response) {
-        Path filePath = Paths.get(uploadDir).resolve(filename).normalize();
-        File file = new File(filePath.toFile().getAbsolutePath());
+        if (!isSafeFilename(filename)) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
+
+        Path basePath = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Path filePath = basePath.resolve(filename).normalize();
+
+        // 업로드 디렉터리 밖으로 벗어나는 경로 접근 차단
+        if (!filePath.startsWith(basePath) || !Files.isRegularFile(filePath)) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+
+        File file = filePath.toFile();
 
         // 파일을 읽어서 응답 스트림으로 전송
         try (FileInputStream fis = new FileInputStream(file);
@@ -114,9 +128,13 @@ public class EgovBoardCKEditorController {
         }
     }
 
+    //2026.02.28 KISA 보안취약점 조치
     private String getFileName(MultipartFile uploadFile) {
         String originalFileName = uploadFile.getOriginalFilename();
-        String ext = originalFileName.substring(originalFileName.lastIndexOf("."));
+        String ext = null;
+        if (originalFileName != null) {
+            ext = originalFileName.substring(originalFileName.lastIndexOf("."));
+        }
         String uniqueIdentifier = UUID.randomUUID().toString();
         String fileName = egovEnvCryptoService.encrypt(originalFileName + uniqueIdentifier);
         return fileName + ext;
@@ -125,6 +143,19 @@ public class EgovBoardCKEditorController {
     private boolean isValidImageFile(String fileName) {
         String extension = fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
         return allowedExtensionSet.contains(extension);
+    }
+
+    private boolean isSafeFilename(String filename) {
+        if (ObjectUtils.isEmpty(filename)) {
+            return false;
+        }
+
+        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            return false;
+        }
+
+        Path normalized = Paths.get(filename).normalize();
+        return normalized.getNameCount() == 1 && filename.equals(normalized.toString());
     }
 
 }

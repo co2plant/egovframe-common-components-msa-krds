@@ -12,6 +12,7 @@ import egovframework.com.cop.cmy.service.CommunityVO;
 import egovframework.com.cop.cmy.service.EgovCommunityService;
 import egovframework.com.cop.cmy.util.EgovCommunityUtility;
 import org.egovframe.rte.fdl.cmmn.EgovAbstractServiceImpl;
+import org.egovframe.rte.fdl.cmmn.exception.FdlException;
 import org.egovframe.rte.fdl.idgnr.EgovIdGnrService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.ObjectUtils;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -122,7 +124,20 @@ public class EgovCommunityServiceImpl extends EgovAbstractServiceImpl implements
     }
 
     @Override
-    public CommunityDTO detail(CommunityVO communityVO) {
+    public CommunityDTO detail(CommunityVO communityVO, Map<String, String> userInfo) {
+        String uniqId = userInfo != null ? userInfo.get("uniqId") : null;
+        if (ObjectUtils.isEmpty(uniqId)) {
+            return null;
+        }
+
+        CmmntyUserId memberId = new CmmntyUserId();
+        memberId.setCmmntyId(communityVO.getCmmntyId());
+        memberId.setEmplyrId(uniqId);
+        Optional<CmmntyUser> member = userRepository.findById(memberId);
+        if (member.isEmpty() || !"Y".equals(member.get().getUseAt())) {
+            return null;
+        }
+
         QCmmnty cmmnty = QCmmnty.cmmnty;
         QUserMaster userMaster = QUserMaster.userMaster;
         QTmplatInfo tmplatInfo = QTmplatInfo.tmplatInfo;
@@ -137,7 +152,11 @@ public class EgovCommunityServiceImpl extends EgovAbstractServiceImpl implements
                 .where(cmmnty.cmmntyId.eq(communityVO.getCmmntyId()))
                 .fetchOne();
 
-        Cmmnty c = Objects.requireNonNull(tuple).get(cmmnty);
+        if (tuple == null) {
+            return null;
+        }
+
+        Cmmnty c = Objects.requireNonNull(tuple.get(cmmnty));
         UserMaster user = tuple.get(userMaster);
         TmplatInfo tmplat = tuple.get(tmplatInfo);
 
@@ -178,7 +197,8 @@ public class EgovCommunityServiceImpl extends EgovAbstractServiceImpl implements
             userRepository.save(EgovCommunityUtility.communityUsereVOToEntity(communityUserVO));
 
             return EgovCommunityUtility.cmmntyEntityToVO(cmmnty);
-        } catch (Exception ex) {
+        //2026.02.28 KISA 보안취약점 조치
+        } catch (FdlException ex) {
             leaveaTrace("fail.common.insert");
             return null;
         }

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8"/>
+    <title>게시글 수정</title>
+</head>
+<body>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    (function () {
+        var m = /*[[${errorMessage}]]*/ '';
+        if (typeof m !== 'string') {
+            m = '';
+        }
+        alert(m || '요청을 처리할 수 없습니다.');
+        history.back();
+    })();
+    /*]]>*/
+</script>
+</body>
+</html>
