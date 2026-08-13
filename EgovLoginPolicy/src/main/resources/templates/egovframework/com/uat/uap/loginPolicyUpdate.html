@@ -124,6 +124,9 @@
                     $('#regDate').val();
                 }
             }
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error("Error details:", textStatus, errorThrown);
+            alert('[(#{fail.common.msg})]');
         });
     }
 
@@ -146,6 +149,9 @@
                     alert('[(#{success.common.insert})]');
                     loginPolicyList();
                 }
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                console.error("Error details:", textStatus, errorThrown);
+                alert('[(#{fail.common.msg})]');
             });
         }
     }
@@ -169,6 +175,9 @@
                     alert('[(#{success.common.update})]');
                     loginPolicyList();
                 }
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                console.error("Error details:", textStatus, errorThrown);
+                alert('[(#{fail.common.msg})]');
             });
         }
     }
@@ -187,6 +196,9 @@
                     alert('[(#{success.common.delete})]');
                     loginPolicyList();
                 }
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                console.error("Error details:", textStatus, errorThrown);
+                alert('[(#{fail.common.msg})]');
             });
         }
     }
