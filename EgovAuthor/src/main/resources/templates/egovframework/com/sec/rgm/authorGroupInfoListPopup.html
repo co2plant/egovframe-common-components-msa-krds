@@ -95,6 +95,9 @@
 
             $('#authorGroupInfo-list-container').html(html);
             $('#authorGroupInfo-pagination-container').html(pagination);
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error("Error details:", textStatus, errorThrown);
+            alert('[(#{fail.common.msg})]');
         });
     }
 
