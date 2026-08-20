@@ -112,12 +112,12 @@
         }).done(function(response) {
             let bbsMasterList = response.bbsMasterList || [];
             let pagination = response.pagination;
-            let lineNumber = response.lineNumber || 0;
+            let paginationInfo = response.paginationInfo;
 
             let html = '';
             if (bbsMasterList.length > 0) {
                 bbsMasterList.forEach(function(bbsMaster, index) {
-                    let number = lineNumber + (index + 1);
+                    let number = paginationInfo.totalRecordCount - paginationInfo.firstRecordIndex - index;
                     html += '<tr>';
                     html += '<td class="text-center">' + number + '</td>';
                     html += '<td class="text-center">' +
